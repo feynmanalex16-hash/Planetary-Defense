@@ -21,6 +21,9 @@ export const TRANSLATIONS = {
     tutorialStep2: '2. Protect cities and batteries at the bottom.',
     tutorialStep3: '3. Middle battery features scatter-shot tech.',
     tutorialStep4: '4. Right-click to activate Gravity Well.',
+    tutorialStep5: '5. Hold [S] + Click building for Shield.',
+    tutorialStep6: '6. Boss: Shield vs Laser -> Gravity on Dish -> Fire!',
+    controlsHint: 'Controls: Left Click - Fire | Right Click - Gravity Well | [S] + Click - Shield',
     tutorialGotIt: 'UNDERSTOOD',
   },
   [Language.CN]: {
@@ -43,6 +46,9 @@ export const TRANSLATIONS = {
     tutorialStep2: '2. 保护底部的城市和炮台。',
     tutorialStep3: '3. 中间炮台拥有散射技术。',
     tutorialStep4: '4. 右键点击激活引力场。',
+    tutorialStep5: '5. 按住 [S] + 点击建筑开启护盾。',
+    tutorialStep6: '6. BOSS战：护盾挡激光 -> 引力波吸弱点 -> 开火！',
+    controlsHint: '操作：左键 - 开火 | 右键 - 引力场 | [S] + 点击 - 护盾',
     tutorialGotIt: '进入战场',
   },
 };

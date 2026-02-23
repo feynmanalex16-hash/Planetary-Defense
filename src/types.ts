@@ -79,6 +79,29 @@ export interface BackgroundElement {
 
 export type GameStatus = 'START' | 'PLAYING' | 'PAUSED' | 'WON' | 'LOST';
 
+export enum BossPhase {
+  NONE = 'NONE',
+  ENTERING = 'ENTERING',
+  LASER = 'LASER',
+  VULNERABLE = 'VULNERABLE',
+  DAMAGED = 'DAMAGED',
+  DESTROYED = 'DESTROYED'
+}
+
+export interface Boss {
+  x: number;
+  y: number;
+  health: number;
+  maxHealth: number;
+  phase: BossPhase;
+  phaseTimer: number;
+  targetBuildingIds: string[];
+  weakPointX: number;
+  weakPointY: number;
+  isWeakPointExposed: boolean;
+  hasTakenDamageInPhase: boolean;
+}
+
 export interface GameState {
   score: number;
   status: GameStatus;
@@ -96,6 +119,9 @@ export interface GameState {
   shieldCharges: number;
   shieldMaxCharges: number;
   shieldCooldown: number;
+  boss: Boss;
+  gravityWellUsageCount: number;
+  hoveredBuildingId: string | null;
 }
 
 export const GAME_WIDTH = 1000;
@@ -110,3 +136,5 @@ export const GRAVITY_RADIUS = 200;
 export const SHIELD_COOLDOWN_MAX = 7000; // 7 seconds
 export const SHIELD_MAX_CHARGES = 2;
 export const SHIELD_DURATION = 5000; // 5 seconds
+export const BOSS_SPAWN_SCORE = 800;
+export const BOSS_MAX_HEALTH = 2;

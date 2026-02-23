@@ -12,7 +12,10 @@ import {
   GRAVITY_STRENGTH,
   SHIELD_COOLDOWN_MAX,
   SHIELD_MAX_CHARGES,
-  SHIELD_DURATION
+  SHIELD_DURATION,
+  BossPhase,
+  BOSS_SPAWN_SCORE,
+  BOSS_MAX_HEALTH
 } from './types';
 
 export const createInitialState = (lang = 'EN'): GameState => {
@@ -67,12 +70,27 @@ export const createInitialState = (lang = 'EN'): GameState => {
     },
     shieldCharges: SHIELD_MAX_CHARGES,
     shieldMaxCharges: SHIELD_MAX_CHARGES,
-    shieldCooldown: 0
+    shieldCooldown: 0,
+    boss: {
+      x: GAME_WIDTH / 2,
+      y: -200,
+      health: BOSS_MAX_HEALTH,
+      maxHealth: BOSS_MAX_HEALTH,
+      phase: BossPhase.NONE,
+      phaseTimer: 0,
+      targetBuildingIds: [],
+      weakPointX: 0,
+      weakPointY: 0,
+      isWeakPointExposed: false,
+      hasTakenDamageInPhase: false
+    },
+    gravityWellUsageCount: 0,
+    hoveredBuildingId: null
   };
 };
 
 export const updateGame = (state: GameState, deltaTime: number): GameState => {
-  if (state.status !== 'PLAYING') return state;
+  if (state.status !== 'PLAYING' || state.showTutorial) return state;
 
   const newState = { ...state };
   
@@ -118,6 +136,106 @@ export const updateGame = (state: GameState, deltaTime: number): GameState => {
     newState.shakeIntensity = Math.max(0, newState.shakeIntensity - deltaTime * 0.05);
   }
 
+  // Update Boss
+  if (newState.score >= BOSS_SPAWN_SCORE && newState.boss.phase === BossPhase.NONE) {
+    newState.boss.phase = BossPhase.ENTERING;
+  }
+
+  if (newState.boss.phase !== BossPhase.NONE) {
+    newState.boss.phaseTimer += deltaTime;
+
+    switch (newState.boss.phase) {
+      case BossPhase.ENTERING:
+        newState.boss.y = Math.min(150, newState.boss.y + deltaTime * 0.05);
+        if (newState.boss.y >= 150) {
+          newState.boss.phase = BossPhase.LASER;
+          newState.boss.phaseTimer = 0;
+          // Pick 2 random targets
+          const targets = [...newState.batteries.filter(b => !b.isDestroyed), ...newState.cities.filter(c => !c.isDestroyed)];
+          newState.boss.targetBuildingIds = targets
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 2)
+            .map(t => t.id);
+        }
+        break;
+
+      case BossPhase.LASER:
+        if (newState.boss.phaseTimer > 5000) {
+          // Fire lasers
+          newState.boss.targetBuildingIds.forEach(id => {
+            const battery = newState.batteries.find(b => b.id === id);
+            const city = newState.cities.find(c => c.id === id);
+            const target = battery || city;
+            if (target) {
+              if (target.hasShield) {
+                target.hasShield = false;
+                target.shieldTimeLeft = 0;
+              } else {
+                target.isDestroyed = true;
+              }
+            }
+          });
+          newState.boss.phase = BossPhase.VULNERABLE;
+          newState.boss.phaseTimer = 0;
+          newState.boss.isWeakPointExposed = true;
+          newState.boss.weakPointX = newState.boss.x;
+          newState.boss.weakPointY = newState.boss.y + 50;
+        }
+        break;
+
+      case BossPhase.VULNERABLE:
+        // Check if gravity well is active on weak point
+        if (newState.gravityWell.active) {
+          const dx = newState.gravityWell.x - newState.boss.weakPointX;
+          const dy = newState.gravityWell.y - newState.boss.weakPointY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 50) {
+            newState.boss.phase = BossPhase.DAMAGED;
+            newState.boss.phaseTimer = 0;
+            newState.boss.hasTakenDamageInPhase = false;
+          }
+        }
+        if (newState.boss.phaseTimer > 5000) {
+          // Reset if player fails to use gravity well
+          newState.boss.phase = BossPhase.LASER;
+          newState.boss.phaseTimer = 0;
+          newState.boss.isWeakPointExposed = false;
+          
+          // Pick 2 random targets
+          const targets = [...newState.batteries.filter(b => !b.isDestroyed), ...newState.cities.filter(c => !c.isDestroyed)];
+          newState.boss.targetBuildingIds = targets
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 2)
+            .map(t => t.id);
+        }
+        break;
+
+      case BossPhase.DAMAGED:
+        // Now vulnerable to missiles
+        // This is handled in missile collision logic
+        if (newState.boss.phaseTimer > 5000) {
+          newState.boss.phase = BossPhase.LASER;
+          newState.boss.phaseTimer = 0;
+          newState.boss.isWeakPointExposed = false;
+
+          // Pick 2 random targets
+          const targets = [...newState.batteries.filter(b => !b.isDestroyed), ...newState.cities.filter(c => !c.isDestroyed)];
+          newState.boss.targetBuildingIds = targets
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 2)
+            .map(t => t.id);
+        }
+        break;
+
+      case BossPhase.DESTROYED:
+        newState.boss.y -= deltaTime * 0.1;
+        if (newState.boss.y < -200) {
+          newState.status = 'WON';
+        }
+        break;
+    }
+  }
+
   // Update missiles
   newState.missiles = state.missiles.map(m => ({
     ...m,
@@ -136,12 +254,39 @@ export const updateGame = (state: GameState, deltaTime: number): GameState => {
         duration: EXPLOSION_DURATION,
         elapsed: 0
       });
+
+      // Check boss hit
+      if (newState.boss.phase === BossPhase.DAMAGED) {
+        const dx = m.targetX - newState.boss.weakPointX;
+        const dy = m.targetY - newState.boss.weakPointY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 60) {
+          newState.shakeIntensity = 30;
+          
+          if (!newState.boss.hasTakenDamageInPhase) {
+            newState.boss.health--;
+            newState.boss.hasTakenDamageInPhase = true;
+            
+            if (newState.boss.health <= 0) {
+              newState.boss.phase = BossPhase.DESTROYED;
+              newState.boss.phaseTimer = 0;
+              newState.score += 500;
+            }
+          }
+        }
+      }
+
       return false;
     }
     return true;
   });
 
   // Update enemy rockets
+  // Stop spawning rockets during boss fight? Or keep them?
+  // Let's keep them but maybe fewer.
+  const rocketSpawnRate = newState.boss.phase === BossPhase.NONE ? 0.035 : 0.01;
+  const maxRockets = newState.boss.phase === BossPhase.NONE ? 5 + Math.floor(newState.wave) : 2;
+
   newState.enemyRockets = state.enemyRockets.map(r => {
     let { x, y, vx, vy } = r;
     
@@ -248,7 +393,7 @@ export const updateGame = (state: GameState, deltaTime: number): GameState => {
   });
 
   // Spawn enemy rockets
-  if (newState.enemyRockets.length < 5 + Math.floor(newState.wave) && Math.random() < 0.035) {
+  if (newState.gravityWellUsageCount < 3 && newState.enemyRockets.length < maxRockets && Math.random() < rocketSpawnRate) {
     const targets = [...newState.batteries.filter(b => !b.isDestroyed), ...newState.cities.filter(c => !c.isDestroyed)];
     if (targets.length > 0) {
       const target = targets[Math.floor(Math.random() * targets.length)];

@@ -23,7 +23,8 @@ import {
   GAME_HEIGHT, 
   MISSILE_SPEED_BASE,
   TARGET_SCORE,
-  SHIELD_DURATION
+  SHIELD_DURATION,
+  BossPhase
 } from './types';
 import { TRANSLATIONS } from './constants';
 import { createInitialState, updateGame } from './gameLogic';
@@ -87,6 +88,7 @@ export default function App() {
     // Sync important UI state back to React (throttled or on change)
     if (nextState.score !== state.score || 
         nextState.status !== state.status || 
+        nextState.gravityWellUsageCount !== state.gravityWellUsageCount ||
         Math.floor(nextState.gravityWell.energy) !== Math.floor(state.gravityWell.energy) ||
         nextState.gravityWell.active !== state.gravityWell.active ||
         nextState.shieldCharges !== state.shieldCharges ||
@@ -97,13 +99,15 @@ export default function App() {
         status: nextState.status,
         wave: nextState.wave,
         gravityWell: nextState.gravityWell,
+        gravityWellUsageCount: nextState.gravityWellUsageCount,
         shieldCharges: nextState.shieldCharges,
-        shieldCooldown: nextState.shieldCooldown
+        shieldCooldown: nextState.shieldCooldown,
+        boss: nextState.boss
       }));
     }
 
     requestRef.current = requestAnimationFrame(animate);
-  }, [state.score, state.status, state.gravityWell.energy, state.gravityWell.active, state.shieldCharges, state.shieldCooldown]);
+  }, [state.score, state.status, state.gravityWell.energy, state.gravityWell.active, state.shieldCharges, state.shieldCooldown, state.boss.phase, state.boss.health]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -150,44 +154,44 @@ export default function App() {
 
     // Shield logic
     if (isShieldKeyHeld) {
-      if (stateRef.current.shieldCharges > 0) {
-        // Find nearest building
-        const buildings = [
-          ...stateRef.current.batteries.filter(b => !b.isDestroyed),
-          ...stateRef.current.cities.filter(c => !c.isDestroyed)
-        ];
-        
-        let targetBuilding = null;
-        let minBuildingDist = 50; // Max distance to snap to building
+      // Find nearest building
+      const buildings = [
+        ...stateRef.current.batteries.filter(b => !b.isDestroyed),
+        ...stateRef.current.cities.filter(c => !c.isDestroyed)
+      ];
+      
+      let targetBuilding = null;
+      let minBuildingDist = 80; // Snap radius
 
-        for (const b of buildings) {
-          const dist = Math.abs(x - b.x);
-          if (dist < minBuildingDist) {
-            minBuildingDist = dist;
-            targetBuilding = b;
-          }
-        }
-
-        if (targetBuilding && !targetBuilding.hasShield) {
-          setState(prev => {
-            const newState = { ...prev };
-            newState.shieldCharges--;
-            newState.batteries = prev.batteries.map(b => 
-              b.id === targetBuilding?.id ? { ...b, hasShield: true, shieldTimeLeft: SHIELD_DURATION } : b
-            );
-            newState.cities = prev.cities.map(c => 
-              c.id === targetBuilding?.id ? { ...c, hasShield: true, shieldTimeLeft: SHIELD_DURATION } : c
-            );
-            
-            stateRef.current.shieldCharges = newState.shieldCharges;
-            stateRef.current.batteries = newState.batteries;
-            stateRef.current.cities = newState.cities;
-            
-            return newState;
-          });
-          return;
+      for (const b of buildings) {
+        const dx = x - b.x;
+        const dy = y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < minBuildingDist) {
+          minBuildingDist = dist;
+          targetBuilding = b;
         }
       }
+
+      if (targetBuilding && stateRef.current.shieldCharges > 0) {
+        setState(prev => {
+          const newState = { ...prev };
+          newState.shieldCharges--;
+          newState.batteries = prev.batteries.map(b => 
+            b.id === targetBuilding?.id ? { ...b, hasShield: true, shieldTimeLeft: SHIELD_DURATION } : b
+          );
+          newState.cities = prev.cities.map(c => 
+            c.id === targetBuilding?.id ? { ...c, hasShield: true, shieldTimeLeft: SHIELD_DURATION } : c
+          );
+          
+          stateRef.current.shieldCharges = newState.shieldCharges;
+          stateRef.current.batteries = newState.batteries;
+          stateRef.current.cities = newState.cities;
+          
+          return newState;
+        });
+      }
+      return; // Always return if S is held to prevent accidental missile fire
     }
 
     // Find nearest battery with ammo
@@ -299,7 +303,14 @@ export default function App() {
     const x = (clientX - rect.left) * scaleX;
     const y = (clientY - rect.top) * scaleY;
 
-    stateRef.current.gravityWell.active = active && stateRef.current.gravityWell.energy > 0;
+    const wasActive = stateRef.current.gravityWell.active;
+    const nowActive = active && stateRef.current.gravityWell.energy > 0;
+    
+    if (nowActive && !wasActive) {
+      stateRef.current.gravityWellUsageCount++;
+    }
+
+    stateRef.current.gravityWell.active = nowActive;
     stateRef.current.gravityWell.x = x;
     stateRef.current.gravityWell.y = y;
   };
@@ -361,6 +372,36 @@ export default function App() {
         }}
         onMouseMove={(e) => {
           if (stateRef.current.gravityWell.active) handleGravityWell(e, true);
+          
+          // Hover logic for shields
+          if (isShieldKeyHeld && canvasRef.current) {
+            const rect = canvasRef.current.getBoundingClientRect();
+            const scaleX = GAME_WIDTH / rect.width;
+            const scaleY = GAME_HEIGHT / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+
+            const buildings = [
+              ...stateRef.current.batteries.filter(b => !b.isDestroyed),
+              ...stateRef.current.cities.filter(c => !c.isDestroyed)
+            ];
+            
+            let targetId = null;
+            let minBuildingDist = 80;
+
+            for (const b of buildings) {
+              const dx = x - b.x;
+              const dy = y - b.y;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist < minBuildingDist) {
+                minBuildingDist = dist;
+                targetId = b.id;
+              }
+            }
+            stateRef.current.hoveredBuildingId = targetId;
+          } else {
+            stateRef.current.hoveredBuildingId = null;
+          }
         }}
         onContextMenu={(e) => e.preventDefault()}
         onTouchStart={(e) => {
@@ -376,8 +417,38 @@ export default function App() {
 
       {/* HUD Layer */}
       {state.status !== 'START' && (
-        <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start pointer-events-none">
-          <div className="flex flex-col gap-2 pointer-events-auto distressed-panel p-4 rounded-sm border-2 border-[#4a443f] text-[#d4d4d4]">
+        <>
+          {/* Boss Health Bar - Top Center */}
+          {state.boss.phase !== BossPhase.NONE && state.boss.phase !== BossPhase.DESTROYED && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-none z-20">
+              <motion.div 
+                initial={{ opacity: 0, y: -50 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="distressed-panel p-3 border-2 border-red-900/50 bg-red-950/40 w-[450px] pointer-events-auto"
+              >
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-red-500 font-stencil tracking-widest text-xs uppercase">Dreadnought Detected</span>
+                  <span className="text-red-500 font-mono text-xs">{state.boss.health} / {state.boss.maxHealth}</span>
+                </div>
+                <div className="h-2 bg-black/60 border border-red-900/30 overflow-hidden">
+                  <motion.div 
+                    className="h-full bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)]"
+                    initial={{ width: '100%' }}
+                    animate={{ width: `${(state.boss.health / state.boss.maxHealth) * 100}%` }}
+                  />
+                </div>
+                <div className="mt-1 text-[9px] text-red-400/80 font-mono uppercase text-center tracking-tight">
+                  {state.boss.phase === BossPhase.LASER && "Charging Superlaser - Deploy Shields"}
+                  {state.boss.phase === BossPhase.VULNERABLE && "Weak Point Exposed - Use Gravity Well"}
+                  {state.boss.phase === BossPhase.DAMAGED && "Core Exposed - Fire All Batteries"}
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start pointer-events-none">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2 pointer-events-auto distressed-panel p-4 rounded-sm border-2 border-[#4a443f] text-[#d4d4d4]">
             <div className="flex items-center gap-2 text-[#ff6a00]">
               <Trophy size={18} />
               <span className="text-lg font-stencil tracking-wider">{t.score}: {state.score}</span>
@@ -394,13 +465,14 @@ export default function App() {
               />
             </div>
           </div>
+        </div>
 
-          <div className="flex flex-col gap-2 pointer-events-auto distressed-panel p-4 rounded-sm border-2 border-[#4a443f] text-[#d4d4d4] min-w-[180px]">
+        <div className="flex flex-col gap-2 pointer-events-auto distressed-panel p-2 rounded-sm border-2 border-[#4a443f] text-[#d4d4d4] min-w-[140px]">
             <div className="flex items-center gap-2 text-purple-400">
-              <Zap size={18} />
-              <span className="text-lg font-stencil tracking-wider uppercase">Gravity</span>
+              <Zap size={14} />
+              <span className="text-sm font-stencil tracking-wider uppercase">Gravity</span>
             </div>
-            <div className="w-full bg-black/40 h-2 border border-[#4a443f] mt-1">
+            <div className="w-full bg-black/40 h-1.5 border border-[#4a443f] mt-0.5">
               <motion.div 
                 className="bg-purple-500 h-full shadow-[0_0_10px_rgba(168,85,247,0.5)]"
                 initial={{ width: '100%' }}
@@ -408,19 +480,18 @@ export default function App() {
                 transition={{ duration: 0.1 }}
               />
             </div>
-            <span className="text-[10px] font-mono opacity-40 uppercase tracking-tighter">Right-Click to Warp Space</span>
           </div>
 
-          <div className="flex flex-col gap-2 pointer-events-auto distressed-panel p-4 rounded-sm border-2 border-[#4a443f] text-[#d4d4d4] min-w-[180px]">
+          <div className="flex flex-col gap-2 pointer-events-auto distressed-panel p-2 rounded-sm border-2 border-[#4a443f] text-[#d4d4d4] min-w-[140px]">
             <div className="flex items-center gap-2 text-blue-400">
-              <Shield size={18} />
-              <span className="text-lg font-stencil tracking-wider uppercase">Shield</span>
+              <Shield size={14} />
+              <span className="text-sm font-stencil tracking-wider uppercase">Shield</span>
             </div>
-            <div className="flex gap-2 mt-1">
+            <div className="flex gap-1.5 mt-0.5">
               {Array.from({ length: state.shieldMaxCharges }).map((_, i) => (
                 <div 
                   key={i} 
-                  className={`flex-1 h-2 border border-[#4a443f] overflow-hidden ${i < state.shieldCharges ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'bg-black/40'}`}
+                  className={`flex-1 h-1.5 border border-[#4a443f] overflow-hidden ${i < state.shieldCharges ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'bg-black/40'}`}
                 >
                   {i === state.shieldCharges && (
                     <motion.div 
@@ -432,7 +503,6 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <span className="text-[10px] font-mono opacity-40 uppercase tracking-tighter">Hold S + Click Building</span>
           </div>
 
           <div className="flex gap-4 pointer-events-auto">
@@ -450,6 +520,7 @@ export default function App() {
             </button>
           </div>
         </div>
+        </>
       )}
 
       {/* Ammo HUD */}
@@ -497,6 +568,14 @@ export default function App() {
                 <span className="text-[#ff6a00] font-stencil">04</span>
                 {t.tutorialStep4}
               </p>
+              <p className="text-[#d4d4d4] font-sans flex items-start gap-3">
+                <span className="text-[#ff6a00] font-stencil">05</span>
+                {t.tutorialStep5}
+              </p>
+              <p className="text-[#d4d4d4] font-sans flex items-start gap-3">
+                <span className="text-[#ff6a00] font-stencil">06</span>
+                {t.tutorialStep6}
+              </p>
             </div>
             <button 
               onClick={closeTutorial}
@@ -529,6 +608,10 @@ export default function App() {
                 {t.start}
               </span>
             </button>
+
+            <div className="text-[10px] text-[#d4d4d4]/40 font-mono uppercase tracking-widest mt-2">
+              {t.controlsHint}
+            </div>
 
             <button 
               onClick={toggleLanguage}

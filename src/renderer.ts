@@ -1,4 +1,4 @@
-import { GameState, GAME_WIDTH, GAME_HEIGHT, SHIELD_DURATION } from './types';
+import { GameState, GAME_WIDTH, GAME_HEIGHT, SHIELD_DURATION, BossPhase } from './types';
 
 export const drawGame = (ctx: CanvasRenderingContext2D, state: GameState) => {
   ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -113,6 +113,18 @@ export const drawGame = (ctx: CanvasRenderingContext2D, state: GameState) => {
         ctx.stroke();
         ctx.restore();
       }
+
+      // Hover highlight
+      if (state.hoveredBuildingId === city.id) {
+        ctx.save();
+        ctx.strokeStyle = '#00c8ff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.arc(city.x, city.y, 50, Math.PI, 0);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
   });
 
@@ -207,8 +219,104 @@ export const drawGame = (ctx: CanvasRenderingContext2D, state: GameState) => {
         ctx.stroke();
         ctx.restore();
       }
+
+      // Hover highlight
+      if (state.hoveredBuildingId === battery.id) {
+        ctx.save();
+        ctx.strokeStyle = '#00c8ff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.arc(battery.x, battery.y, 50, Math.PI, 0);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
   });
+
+  // Draw Boss
+  if (state.boss.phase !== BossPhase.NONE) {
+    ctx.save();
+    
+    // Boss Body (Death Star style)
+    ctx.translate(state.boss.x, state.boss.y);
+    
+    // Main sphere
+    const grad = ctx.createRadialGradient(0, 0, 50, 0, 0, 100);
+    grad.addColorStop(0, '#4a4a4a');
+    grad.addColorStop(1, '#1a1a1a');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 100, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Surface details (grid lines)
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 1;
+    for (let i = -3; i <= 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-100, i * 25);
+      ctx.lineTo(100, i * 25);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(i * 25, -100);
+      ctx.lineTo(i * 25, 100);
+      ctx.stroke();
+    }
+    
+    // Equatorial trench
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(-100, -5, 200, 10);
+    
+    // Weak point / Superlaser dish
+    const dishX = 0;
+    const dishY = 50;
+    ctx.beginPath();
+    ctx.arc(dishX, dishY, 30, 0, Math.PI * 2);
+    ctx.fillStyle = '#222';
+    ctx.fill();
+    ctx.stroke();
+    
+    if (state.boss.isWeakPointExposed) {
+      const pulse = (Math.sin(Date.now() / 100) + 1) / 2;
+      ctx.beginPath();
+      ctx.arc(dishX, dishY, 15, 0, Math.PI * 2);
+      ctx.fillStyle = state.boss.phase === BossPhase.DAMAGED ? `rgba(255, 0, 0, ${0.5 + pulse * 0.5})` : `rgba(0, 255, 255, ${0.5 + pulse * 0.5})`;
+      ctx.fill();
+      
+      // Glow
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = state.boss.phase === BossPhase.DAMAGED ? 'red' : 'cyan';
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+    
+    ctx.restore();
+    
+    // Draw Lasers
+    if (state.boss.phase === BossPhase.LASER && state.boss.phaseTimer > 1000) {
+      ctx.save();
+      const laserProgress = Math.min(1, (state.boss.phaseTimer - 1000) / 4000);
+      ctx.strokeStyle = `rgba(0, 255, 0, ${laserProgress})`;
+      ctx.lineWidth = 4 * laserProgress;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = 'lime';
+      
+      state.boss.targetBuildingIds.forEach(id => {
+        const target = [...state.batteries, ...state.cities].find(t => t.id === id);
+        if (target) {
+          ctx.beginPath();
+          ctx.moveTo(state.boss.x, state.boss.y + 50);
+          ctx.lineTo(target.x, target.y);
+          ctx.stroke();
+        }
+      });
+      ctx.restore();
+    }
+  }
 
   // Draw Enemy Rockets - Nuclear Missiles
   state.enemyRockets.forEach(rocket => {
