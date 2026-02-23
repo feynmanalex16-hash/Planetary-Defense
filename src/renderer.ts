@@ -1,4 +1,4 @@
-import { GameState, GAME_WIDTH, GAME_HEIGHT } from './types';
+import { GameState, GAME_WIDTH, GAME_HEIGHT, SHIELD_DURATION } from './types';
 
 export const drawGame = (ctx: CanvasRenderingContext2D, state: GameState) => {
   ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -96,6 +96,23 @@ export const drawGame = (ctx: CanvasRenderingContext2D, state: GameState) => {
               }
           }
       }
+
+      // Shield effect
+      if (city.hasShield) {
+        ctx.save();
+        const shieldRatio = city.shieldTimeLeft / SHIELD_DURATION;
+        ctx.beginPath();
+        ctx.arc(city.x, city.y, 45, Math.PI, 0);
+        const shieldGrad = ctx.createRadialGradient(city.x, city.y, 30, city.x, city.y, 45);
+        shieldGrad.addColorStop(0, 'rgba(0, 150, 255, 0)');
+        shieldGrad.addColorStop(1, `rgba(0, 200, 255, ${0.4 * shieldRatio})`);
+        ctx.fillStyle = shieldGrad;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(100, 220, 255, ${0.8 * shieldRatio})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
     }
   });
 
@@ -143,13 +160,24 @@ export const drawGame = (ctx: CanvasRenderingContext2D, state: GameState) => {
       ctx.fillRect(battery.x - 12, battery.y - 30, 24, 8);
       ctx.strokeRect(battery.x - 12, battery.y - 30, 24, 8);
 
-      // Draw turret - heavy cannon
+      // Draw turret - heavy cannon with rotation
+      ctx.save();
+      ctx.translate(battery.x, battery.y - 30);
+      ctx.rotate(battery.angle + Math.PI / 2); // Adjust for vertical orientation
+      
       ctx.fillStyle = '#3d3d2a';
-      ctx.fillRect(battery.x - 5, battery.y - 50, 10, 20);
-      ctx.strokeRect(battery.x - 5, battery.y - 50, 10, 20);
+      ctx.strokeStyle = '#2d2d1e';
+      ctx.lineWidth = 2;
+      
+      // Barrel
+      ctx.fillRect(-5, -20, 10, 20);
+      ctx.strokeRect(-5, -20, 10, 20);
       
       // Muzzle brake
-      ctx.fillRect(battery.x - 7, battery.y - 55, 14, 5);
+      ctx.fillRect(-7, -25, 14, 5);
+      ctx.strokeRect(-7, -25, 14, 5);
+      
+      ctx.restore();
       
       // Antenna
       ctx.strokeStyle = '#1a1a0a';
@@ -162,6 +190,23 @@ export const drawGame = (ctx: CanvasRenderingContext2D, state: GameState) => {
       ctx.beginPath();
       ctx.arc(battery.x + 20, battery.y - 40, 2, 0, Math.PI * 2);
       ctx.fill();
+
+      // Shield effect
+      if (battery.hasShield) {
+        ctx.save();
+        const shieldRatio = battery.shieldTimeLeft / SHIELD_DURATION;
+        ctx.beginPath();
+        ctx.arc(battery.x, battery.y, 45, Math.PI, 0);
+        const shieldGrad = ctx.createRadialGradient(battery.x, battery.y, 30, battery.x, battery.y, 45);
+        shieldGrad.addColorStop(0, 'rgba(0, 150, 255, 0)');
+        shieldGrad.addColorStop(1, `rgba(0, 200, 255, ${0.4 * shieldRatio})`);
+        ctx.fillStyle = shieldGrad;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(100, 220, 255, ${0.8 * shieldRatio})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
     }
   });
 

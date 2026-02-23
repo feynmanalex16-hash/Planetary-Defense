@@ -22,7 +22,8 @@ import {
   GAME_WIDTH, 
   GAME_HEIGHT, 
   MISSILE_SPEED_BASE,
-  TARGET_SCORE
+  TARGET_SCORE,
+  SHIELD_DURATION
 } from './types';
 import { TRANSLATIONS } from './constants';
 import { createInitialState, updateGame } from './gameLogic';
@@ -30,6 +31,7 @@ import { drawGame } from './renderer';
 
 export default function App() {
   const [state, setState] = useState<GameState>(() => createInitialState());
+  const [isShieldKeyHeld, setIsShieldKeyHeld] = useState(false);
   const stateRef = useRef<GameState>(createInitialState());
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -86,18 +88,38 @@ export default function App() {
     if (nextState.score !== state.score || 
         nextState.status !== state.status || 
         Math.floor(nextState.gravityWell.energy) !== Math.floor(state.gravityWell.energy) ||
-        nextState.gravityWell.active !== state.gravityWell.active) {
+        nextState.gravityWell.active !== state.gravityWell.active ||
+        nextState.shieldCharges !== state.shieldCharges ||
+        (nextState.shieldCharges < nextState.shieldMaxCharges && Math.floor(nextState.shieldCooldown / 200) !== Math.floor(state.shieldCooldown / 200))) {
       setState(prev => ({
         ...prev,
         score: nextState.score,
         status: nextState.status,
         wave: nextState.wave,
-        gravityWell: nextState.gravityWell
+        gravityWell: nextState.gravityWell,
+        shieldCharges: nextState.shieldCharges,
+        shieldCooldown: nextState.shieldCooldown
       }));
     }
 
     requestRef.current = requestAnimationFrame(animate);
-  }, [state.score, state.status]);
+  }, [state.score, state.status, state.gravityWell.energy, state.gravityWell.active, state.shieldCharges, state.shieldCooldown]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 's') setIsShieldKeyHeld(true);
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 's') setIsShieldKeyHeld(false);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
@@ -126,6 +148,48 @@ export default function App() {
     const x = (clientX - rect.left) * scaleX;
     const y = (clientY - rect.top) * scaleY;
 
+    // Shield logic
+    if (isShieldKeyHeld) {
+      if (stateRef.current.shieldCharges > 0) {
+        // Find nearest building
+        const buildings = [
+          ...stateRef.current.batteries.filter(b => !b.isDestroyed),
+          ...stateRef.current.cities.filter(c => !c.isDestroyed)
+        ];
+        
+        let targetBuilding = null;
+        let minBuildingDist = 50; // Max distance to snap to building
+
+        for (const b of buildings) {
+          const dist = Math.abs(x - b.x);
+          if (dist < minBuildingDist) {
+            minBuildingDist = dist;
+            targetBuilding = b;
+          }
+        }
+
+        if (targetBuilding && !targetBuilding.hasShield) {
+          setState(prev => {
+            const newState = { ...prev };
+            newState.shieldCharges--;
+            newState.batteries = prev.batteries.map(b => 
+              b.id === targetBuilding?.id ? { ...b, hasShield: true, shieldTimeLeft: SHIELD_DURATION } : b
+            );
+            newState.cities = prev.cities.map(c => 
+              c.id === targetBuilding?.id ? { ...c, hasShield: true, shieldTimeLeft: SHIELD_DURATION } : c
+            );
+            
+            stateRef.current.shieldCharges = newState.shieldCharges;
+            stateRef.current.batteries = newState.batteries;
+            stateRef.current.cities = newState.cities;
+            
+            return newState;
+          });
+          return;
+        }
+      }
+    }
+
     // Find nearest battery with ammo
     const availableBatteries = state.batteries.filter(b => !b.isDestroyed && b.ammo > 0);
     if (availableBatteries.length === 0) return;
@@ -148,7 +212,7 @@ export default function App() {
       const currentBatteries = stateRef.current.batteries;
 
       const updatedBatteries = currentBatteries.map(b => 
-        b.id === nearest.id ? { ...b, ammo: b.ammo - 1 } : b
+        b.id === nearest.id ? { ...b, ammo: b.ammo - 1, angle: Math.atan2(y - (b.y - 55), x - b.x) } : b
       );
       
       const missilesToAdd = [];
@@ -345,6 +409,30 @@ export default function App() {
               />
             </div>
             <span className="text-[10px] font-mono opacity-40 uppercase tracking-tighter">Right-Click to Warp Space</span>
+          </div>
+
+          <div className="flex flex-col gap-2 pointer-events-auto distressed-panel p-4 rounded-sm border-2 border-[#4a443f] text-[#d4d4d4] min-w-[180px]">
+            <div className="flex items-center gap-2 text-blue-400">
+              <Shield size={18} />
+              <span className="text-lg font-stencil tracking-wider uppercase">Shield</span>
+            </div>
+            <div className="flex gap-2 mt-1">
+              {Array.from({ length: state.shieldMaxCharges }).map((_, i) => (
+                <div 
+                  key={i} 
+                  className={`flex-1 h-2 border border-[#4a443f] overflow-hidden ${i < state.shieldCharges ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'bg-black/40'}`}
+                >
+                  {i === state.shieldCharges && (
+                    <motion.div 
+                      className="bg-blue-500/50 h-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(state.shieldCooldown / 7000) * 100}%` }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            <span className="text-[10px] font-mono opacity-40 uppercase tracking-tighter">Hold S + Click Building</span>
           </div>
 
           <div className="flex gap-4 pointer-events-auto">

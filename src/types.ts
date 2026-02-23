@@ -58,10 +58,15 @@ export interface Battery extends Entity {
   ammo: number;
   maxAmmo: number;
   isDestroyed: boolean;
+  hasShield: boolean;
+  shieldTimeLeft: number;
+  angle: number;
 }
 
 export interface City extends Entity {
   isDestroyed: boolean;
+  hasShield: boolean;
+  shieldTimeLeft: number;
 }
 
 export interface BackgroundElement {
@@ -88,6 +93,9 @@ export interface GameState {
   backgroundElements: BackgroundElement[];
   showTutorial: boolean;
   gravityWell: GravityWell;
+  shieldCharges: number;
+  shieldMaxCharges: number;
+  shieldCooldown: number;
 }
 
 export const GAME_WIDTH = 1000;
@@ -99,3 +107,6 @@ export const ROCKET_SPEED_BASE = 0.8; // Decreased from 1.5
 export const MISSILE_SPEED_BASE = 0.05;
 export const GRAVITY_STRENGTH = 5000;
 export const GRAVITY_RADIUS = 200;
+export const SHIELD_COOLDOWN_MAX = 7000; // 7 seconds
+export const SHIELD_MAX_CHARGES = 2;
+export const SHIELD_DURATION = 5000; // 5 seconds

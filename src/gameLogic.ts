@@ -9,23 +9,26 @@ import {
   ROCKET_SPEED_BASE,
   MISSILE_SPEED_BASE,
   TARGET_SCORE,
-  GRAVITY_STRENGTH
+  GRAVITY_STRENGTH,
+  SHIELD_COOLDOWN_MAX,
+  SHIELD_MAX_CHARGES,
+  SHIELD_DURATION
 } from './types';
 
 export const createInitialState = (lang = 'EN'): GameState => {
   const batteries: Battery[] = [
-    { id: 'b-left', x: 50, y: GAME_HEIGHT - 20, ammo: 20, maxAmmo: 20, isDestroyed: false },
-    { id: 'b-mid', x: 500, y: GAME_HEIGHT - 20, ammo: 40, maxAmmo: 40, isDestroyed: false },
-    { id: 'b-right', x: 950, y: GAME_HEIGHT - 20, ammo: 20, maxAmmo: 20, isDestroyed: false },
+    { id: 'b-left', x: 50, y: GAME_HEIGHT - 20, ammo: 20, maxAmmo: 20, isDestroyed: false, hasShield: false, shieldTimeLeft: 0, angle: -Math.PI / 2 },
+    { id: 'b-mid', x: 500, y: GAME_HEIGHT - 20, ammo: 40, maxAmmo: 40, isDestroyed: false, hasShield: false, shieldTimeLeft: 0, angle: -Math.PI / 2 },
+    { id: 'b-right', x: 950, y: GAME_HEIGHT - 20, ammo: 20, maxAmmo: 20, isDestroyed: false, hasShield: false, shieldTimeLeft: 0, angle: -Math.PI / 2 },
   ];
 
   const cities: City[] = [
-    { id: 'c1', x: 180, y: GAME_HEIGHT - 20, isDestroyed: false },
-    { id: 'c2', x: 280, y: GAME_HEIGHT - 20, isDestroyed: false },
-    { id: 'c3', x: 380, y: GAME_HEIGHT - 20, isDestroyed: false },
-    { id: 'c4', x: 620, y: GAME_HEIGHT - 20, isDestroyed: false },
-    { id: 'c5', x: 720, y: GAME_HEIGHT - 20, isDestroyed: false },
-    { id: 'c6', x: 820, y: GAME_HEIGHT - 20, isDestroyed: false },
+    { id: 'c1', x: 180, y: GAME_HEIGHT - 20, isDestroyed: false, hasShield: false, shieldTimeLeft: 0 },
+    { id: 'c2', x: 280, y: GAME_HEIGHT - 20, isDestroyed: false, hasShield: false, shieldTimeLeft: 0 },
+    { id: 'c3', x: 380, y: GAME_HEIGHT - 20, isDestroyed: false, hasShield: false, shieldTimeLeft: 0 },
+    { id: 'c4', x: 620, y: GAME_HEIGHT - 20, isDestroyed: false, hasShield: false, shieldTimeLeft: 0 },
+    { id: 'c5', x: 720, y: GAME_HEIGHT - 20, isDestroyed: false, hasShield: false, shieldTimeLeft: 0 },
+    { id: 'c6', x: 820, y: GAME_HEIGHT - 20, isDestroyed: false, hasShield: false, shieldTimeLeft: 0 },
   ];
 
   const backgroundElements = Array.from({ length: 10 }).map((_, i) => {
@@ -61,7 +64,10 @@ export const createInitialState = (lang = 'EN'): GameState => {
       radius: 200,
       energy: 100,
       maxEnergy: 100
-    }
+    },
+    shieldCharges: SHIELD_MAX_CHARGES,
+    shieldMaxCharges: SHIELD_MAX_CHARGES,
+    shieldCooldown: 0
   };
 };
 
@@ -77,6 +83,35 @@ export const updateGame = (state: GameState, deltaTime: number): GameState => {
   } else {
     newState.gravityWell.energy = Math.min(newState.gravityWell.maxEnergy, newState.gravityWell.energy + deltaTime * 0.02);
   }
+
+  // Update shield recharging
+  if (newState.shieldCharges < newState.shieldMaxCharges) {
+    newState.shieldCooldown += deltaTime;
+    if (newState.shieldCooldown >= SHIELD_COOLDOWN_MAX) {
+      newState.shieldCharges++;
+      newState.shieldCooldown = 0;
+    }
+  } else {
+    newState.shieldCooldown = 0;
+  }
+
+  // Update active shields duration
+  newState.batteries = newState.batteries.map(b => {
+    if (b.hasShield) {
+      const timeLeft = b.shieldTimeLeft - deltaTime;
+      if (timeLeft <= 0) return { ...b, hasShield: false, shieldTimeLeft: 0 };
+      return { ...b, shieldTimeLeft: timeLeft };
+    }
+    return b;
+  });
+  newState.cities = newState.cities.map(c => {
+    if (c.hasShield) {
+      const timeLeft = c.shieldTimeLeft - deltaTime;
+      if (timeLeft <= 0) return { ...c, hasShield: false, shieldTimeLeft: 0 };
+      return { ...c, shieldTimeLeft: timeLeft };
+    }
+    return c;
+  });
 
   // Update screen shake
   if (newState.shakeIntensity > 0) {
@@ -134,10 +169,24 @@ export const updateGame = (state: GameState, deltaTime: number): GameState => {
       newState.shakeIntensity = 15;
       // Check what was hit
       const battery = newState.batteries.find(b => Math.abs(b.x - r.x) < 30 && !b.isDestroyed);
-      if (battery) battery.isDestroyed = true;
+      if (battery) {
+        if (battery.hasShield) {
+          battery.hasShield = false;
+          battery.shieldTimeLeft = 0;
+        } else {
+          battery.isDestroyed = true;
+        }
+      }
       
       const city = newState.cities.find(c => Math.abs(c.x - r.x) < 30 && !c.isDestroyed);
-      if (city) city.isDestroyed = true;
+      if (city) {
+        if (city.hasShield) {
+          city.hasShield = false;
+          city.shieldTimeLeft = 0;
+        } else {
+          city.isDestroyed = true;
+        }
+      }
 
       return false;
     }
@@ -199,7 +248,7 @@ export const updateGame = (state: GameState, deltaTime: number): GameState => {
   });
 
   // Spawn enemy rockets
-  if (newState.enemyRockets.length < 3 + Math.floor(newState.wave / 2) && Math.random() < 0.02) {
+  if (newState.enemyRockets.length < 5 + Math.floor(newState.wave) && Math.random() < 0.035) {
     const targets = [...newState.batteries.filter(b => !b.isDestroyed), ...newState.cities.filter(c => !c.isDestroyed)];
     if (targets.length > 0) {
       const target = targets[Math.floor(Math.random() * targets.length)];
