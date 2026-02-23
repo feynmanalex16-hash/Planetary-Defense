@@ -20,6 +20,7 @@ export const TRANSLATIONS = {
     tutorialStep1: '1. Tap screen to intercept enemy rockets.',
     tutorialStep2: '2. Protect cities and batteries at the bottom.',
     tutorialStep3: '3. Middle battery features scatter-shot tech.',
+    tutorialStep4: '4. Right-click to activate Gravity Well.',
     tutorialGotIt: 'UNDERSTOOD',
   },
   [Language.CN]: {
@@ -41,6 +42,7 @@ export const TRANSLATIONS = {
     tutorialStep1: '1. 点击屏幕拦截敌方导弹。',
     tutorialStep2: '2. 保护底部的城市和炮台。',
     tutorialStep3: '3. 中间炮台拥有散射技术。',
+    tutorialStep4: '4. 右键点击激活引力场。',
     tutorialGotIt: '进入战场',
   },
 };

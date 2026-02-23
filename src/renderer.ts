@@ -36,6 +36,37 @@ export const drawGame = (ctx: CanvasRenderingContext2D, state: GameState) => {
   ctx.lineTo(GAME_WIDTH, GAME_HEIGHT);
   ctx.fill();
 
+  // Draw Gravity Well
+  if (state.gravityWell.active) {
+    const g = state.gravityWell;
+    const pulse = Math.sin(Date.now() / 100) * 0.1 + 0.9;
+    
+    ctx.save();
+    // Outer distorted field
+    const grad = ctx.createRadialGradient(g.x, g.y, 0, g.x, g.y, g.radius);
+    grad.addColorStop(0, 'rgba(138, 43, 226, 0.3)');
+    grad.addColorStop(0.6, 'rgba(75, 0, 130, 0.1)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(g.x, g.y, g.radius * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Core
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#8a2be2';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(g.x, g.y, 15, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Swirl effect
+    ctx.rotate(Date.now() / 200);
+    ctx.restore();
+  }
+
   // Draw Cities - Ruined buildings
   state.cities.forEach(city => {
     if (city.isDestroyed) {
@@ -147,7 +178,7 @@ export const drawGame = (ctx: CanvasRenderingContext2D, state: GameState) => {
     // Missile body
     ctx.save();
     ctx.translate(rocket.x, rocket.y);
-    const angle = Math.atan2(rocket.targetY - rocket.startY, rocket.targetX - rocket.startX);
+    const angle = Math.atan2(rocket.vy, rocket.vx);
     ctx.rotate(angle);
     
     ctx.fillStyle = '#d4d4d4';

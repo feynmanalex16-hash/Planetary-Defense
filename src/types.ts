@@ -33,8 +33,18 @@ export interface EnemyRocket extends Entity {
   startY: number;
   targetX: number;
   targetY: number;
+  vx: number;
+  vy: number;
   speed: number;
-  progress: number;
+}
+
+export interface GravityWell {
+  active: boolean;
+  x: number;
+  y: number;
+  radius: number;
+  energy: number;
+  maxEnergy: number;
 }
 
 export interface Explosion extends Entity {
@@ -77,12 +87,15 @@ export interface GameState {
   wave: number;
   backgroundElements: BackgroundElement[];
   showTutorial: boolean;
+  gravityWell: GravityWell;
 }
 
 export const GAME_WIDTH = 1000;
 export const GAME_HEIGHT = 600;
 export const TARGET_SCORE = 1000;
-export const EXPLOSION_MAX_RADIUS = 40;
+export const EXPLOSION_MAX_RADIUS = 60;
 export const EXPLOSION_DURATION = 1500; // ms
-export const ROCKET_SPEED_BASE = 0.0005;
-export const MISSILE_SPEED_BASE = 0.035;
+export const ROCKET_SPEED_BASE = 0.8; // Decreased from 1.5
+export const MISSILE_SPEED_BASE = 0.05;
+export const GRAVITY_STRENGTH = 5000;
+export const GRAVITY_RADIUS = 200;

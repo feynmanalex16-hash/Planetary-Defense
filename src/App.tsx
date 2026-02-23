@@ -83,12 +83,16 @@ export default function App() {
     }
 
     // Sync important UI state back to React (throttled or on change)
-    if (nextState.score !== state.score || nextState.status !== state.status) {
+    if (nextState.score !== state.score || 
+        nextState.status !== state.status || 
+        Math.floor(nextState.gravityWell.energy) !== Math.floor(state.gravityWell.energy) ||
+        nextState.gravityWell.active !== state.gravityWell.active) {
       setState(prev => ({
         ...prev,
         score: nextState.score,
         status: nextState.status,
-        wave: nextState.wave
+        wave: nextState.wave,
+        gravityWell: nextState.gravityWell
       }));
     }
 
@@ -204,6 +208,38 @@ export default function App() {
     });
   };
 
+  const handleGravityWell = (e: React.MouseEvent | React.TouchEvent, active: boolean) => {
+    if (state.status !== 'PLAYING') return;
+    if (!canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    
+    let clientX, clientY;
+    if ('touches' in e) {
+      if (e.touches.length === 0 && !active) {
+        // For touch end, we don't have touches
+        stateRef.current.gravityWell.active = false;
+        return;
+      }
+      clientX = e.touches[0]?.clientX || 0;
+      clientY = e.touches[0]?.clientY || 0;
+    } else {
+      clientX = (e as React.MouseEvent).clientX;
+      clientY = (e as React.MouseEvent).clientY;
+    }
+
+    const scaleX = GAME_WIDTH / rect.width;
+    const scaleY = GAME_HEIGHT / rect.height;
+    
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+
+    stateRef.current.gravityWell.active = active && stateRef.current.gravityWell.energy > 0;
+    stateRef.current.gravityWell.x = x;
+    stateRef.current.gravityWell.y = y;
+  };
+
   const startGame = () => {
     stateRef.current.status = 'PLAYING';
     setState(prev => ({ ...prev, status: 'PLAYING' }));
@@ -252,8 +288,25 @@ export default function App() {
         ref={canvasRef}
         width={GAME_WIDTH}
         height={GAME_HEIGHT}
-        onClick={handleCanvasClick}
-        onTouchStart={handleCanvasClick}
+        onMouseDown={(e) => {
+          if (e.button === 2) handleGravityWell(e, true);
+          else handleCanvasClick(e);
+        }}
+        onMouseUp={(e) => {
+          if (e.button === 2) handleGravityWell(e, false);
+        }}
+        onMouseMove={(e) => {
+          if (stateRef.current.gravityWell.active) handleGravityWell(e, true);
+        }}
+        onContextMenu={(e) => e.preventDefault()}
+        onTouchStart={(e) => {
+          if (e.touches.length > 1) handleGravityWell(e, true);
+          else handleCanvasClick(e);
+        }}
+        onTouchEnd={(e) => handleGravityWell(e, false)}
+        onTouchMove={(e) => {
+          if (stateRef.current.gravityWell.active) handleGravityWell(e, true);
+        }}
         className="cursor-crosshair shadow-2xl shadow-cyan-500/20"
       />
 
@@ -276,6 +329,22 @@ export default function App() {
                 animate={{ width: `${(state.score / TARGET_SCORE) * 100}%` }}
               />
             </div>
+          </div>
+
+          <div className="flex flex-col gap-2 pointer-events-auto distressed-panel p-4 rounded-sm border-2 border-[#4a443f] text-[#d4d4d4] min-w-[180px]">
+            <div className="flex items-center gap-2 text-purple-400">
+              <Zap size={18} />
+              <span className="text-lg font-stencil tracking-wider uppercase">Gravity</span>
+            </div>
+            <div className="w-full bg-black/40 h-2 border border-[#4a443f] mt-1">
+              <motion.div 
+                className="bg-purple-500 h-full shadow-[0_0_10px_rgba(168,85,247,0.5)]"
+                initial={{ width: '100%' }}
+                animate={{ width: `${state.gravityWell.energy}%` }}
+                transition={{ duration: 0.1 }}
+              />
+            </div>
+            <span className="text-[10px] font-mono opacity-40 uppercase tracking-tighter">Right-Click to Warp Space</span>
           </div>
 
           <div className="flex gap-4 pointer-events-auto">
@@ -335,6 +404,10 @@ export default function App() {
               <p className="text-[#d4d4d4] font-sans flex items-start gap-3">
                 <span className="text-[#ff6a00] font-stencil">03</span>
                 {t.tutorialStep3}
+              </p>
+              <p className="text-[#d4d4d4] font-sans flex items-start gap-3">
+                <span className="text-[#ff6a00] font-stencil">04</span>
+                {t.tutorialStep4}
               </p>
             </div>
             <button 
