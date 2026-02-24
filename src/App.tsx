@@ -23,6 +23,7 @@ import {
   GAME_HEIGHT, 
   MISSILE_SPEED_BASE,
   TARGET_SCORE,
+  BOSS_SPAWN_SCORE,
   SHIELD_DURATION,
   BossPhase
 } from './types';
@@ -190,6 +191,7 @@ export default function App() {
           
           return newState;
         });
+        setIsShieldKeyHeld(false);
       }
       return; // Always return if S is held to prevent accidental missile fire
     }
@@ -455,13 +457,13 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2 text-white/40">
               <Target size={16} />
-              <span className="text-xs font-mono">{t.target}: {TARGET_SCORE}</span>
+              <span className="text-xs font-mono">{t.target}: {BOSS_SPAWN_SCORE}</span>
             </div>
             <div className="w-full bg-black/40 h-2 border border-[#4a443f] mt-1">
               <motion.div 
                 className="bg-[#ff6a00] h-full"
                 initial={{ width: 0 }}
-                animate={{ width: `${(state.score / TARGET_SCORE) * 100}%` }}
+                animate={{ width: `${Math.min(100, (state.score / BOSS_SPAWN_SCORE) * 100)}%` }}
               />
             </div>
           </div>

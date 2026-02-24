@@ -139,6 +139,7 @@ export const updateGame = (state: GameState, deltaTime: number): GameState => {
   // Update Boss
   if (newState.score >= BOSS_SPAWN_SCORE && newState.boss.phase === BossPhase.NONE) {
     newState.boss.phase = BossPhase.ENTERING;
+    newState.enemyRockets = []; // Remove all missiles when boss appears
   }
 
   if (newState.boss.phase !== BossPhase.NONE) {
@@ -393,7 +394,7 @@ export const updateGame = (state: GameState, deltaTime: number): GameState => {
   });
 
   // Spawn enemy rockets
-  if (newState.gravityWellUsageCount < 3 && newState.enemyRockets.length < maxRockets && Math.random() < rocketSpawnRate) {
+  if (newState.boss.phase === BossPhase.NONE && newState.gravityWellUsageCount < 3 && newState.enemyRockets.length < maxRockets && Math.random() < rocketSpawnRate) {
     const targets = [...newState.batteries.filter(b => !b.isDestroyed), ...newState.cities.filter(c => !c.isDestroyed)];
     if (targets.length > 0) {
       const target = targets[Math.floor(Math.random() * targets.length)];
@@ -418,9 +419,7 @@ export const updateGame = (state: GameState, deltaTime: number): GameState => {
   }
 
   // Win/Loss conditions
-  if (newState.score >= TARGET_SCORE) {
-    newState.status = 'WON';
-  } else if (newState.batteries.every(b => b.isDestroyed) || newState.cities.every(c => c.isDestroyed)) {
+  if (newState.batteries.every(b => b.isDestroyed) || newState.cities.every(c => c.isDestroyed)) {
     newState.status = 'LOST';
   }
 

@@ -126,7 +126,7 @@ export interface GameState {
 
 export const GAME_WIDTH = 1000;
 export const GAME_HEIGHT = 600;
-export const TARGET_SCORE = 1000;
+export const TARGET_SCORE = 999999;
 export const EXPLOSION_MAX_RADIUS = 60;
 export const EXPLOSION_DURATION = 1500; // ms
 export const ROCKET_SPEED_BASE = 0.8; // Decreased from 1.5
@@ -136,5 +136,5 @@ export const GRAVITY_RADIUS = 200;
 export const SHIELD_COOLDOWN_MAX = 7000; // 7 seconds
 export const SHIELD_MAX_CHARGES = 2;
 export const SHIELD_DURATION = 5000; // 5 seconds
-export const BOSS_SPAWN_SCORE = 800;
+export const BOSS_SPAWN_SCORE = 1000;
 export const BOSS_MAX_HEALTH = 2;
